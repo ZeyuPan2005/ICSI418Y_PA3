@@ -1,150 +1,103 @@
-# ICSI418Y PA3 — Projects and Project Memberships
+# ICSI418Y_PA3
 
-PA3 extends the existing PA2 signup/login application with project creation, project listing, and many-to-many project membership management. It reuses the existing MongoDB Atlas connection, database `pa2`, and lowercase `users` collection.
+Programming Assignment 3 for ICSI 418Y Software Engineering. This application builds on the PA2 signup and login system by adding projects and project memberships.
 
 ## Features
 
-- Existing Signup and Login remain available under **Accounts**.
-- Create projects with a name, description, status, and registered Project Lead.
-- Status is exactly `Planning`, `Active`, or `Completed`.
-- Display project leads and members by name and username.
-- Automatically add the lead as a member in the same database transaction as project creation.
-- Add a user to several projects; reject duplicate membership within one project.
-- Remove non-lead members; protect the lead in both the UI and API.
-- Update lists after changes; show loading, empty, success, and failure states with retry controls.
-- Refresh registered users after successful signup.
+- Register new users and log in with existing accounts.
+- Create projects with a name, description, status, and registered project lead.
+- View projects and their leads by name.
+- View, add, and remove project members.
+- Add the same user to different projects, but prevent duplicate membership in one project.
+- Automatically add project leads as members and prevent their removal.
+- Display clear feedback for invalid operations.
 
-## Technologies and structure
+## Technologies
 
-React, JavaScript, Vite, CSS; Node.js, Express 5, CommonJS, and the native MongoDB driver. No Mongoose, JWT, or React Router was added.
+- Frontend: React, JavaScript, Vite, CSS
+- Backend: Node.js, Express
+- Database: MongoDB Atlas with the native MongoDB Node.js driver
+
+## Project Structure
 
 ```text
-client/
-  src/
-    App.jsx                Shared data, navigation, project selection
-    Signup.jsx, Login.jsx  Existing PA2 account forms
-    CreateProject.jsx      Project form
-    ProjectList.jsx        Project cards and readable lead names
-    ProjectMembers.jsx     Member retrieval, addition, removal
-    api.js                 JSON requests and user display labels
-    App.css, index.css     Responsive styling
+client/src/
+  App.jsx                 Main page and shared state
+  Signup.jsx, Login.jsx   Account forms from PA2
+  CreateProject.jsx       Project creation form
+  ProjectList.jsx         Project list
+  ProjectMembers.jsx      Member management
+  api.js                  HTTP requests
+
 server/
-  server.js                Existing .env configuration, database connection, startup
-  app.js                   Existing auth routes, Express setup, safe error responses
-  projects.js              PA3 routes, validation, transaction, unique index
-  test/
-    app.test.js            Offline HTTP validation and failure tests
-    integration.test.js    Real Atlas integration tests with fixture cleanup
-    helpers.js             Temporary HTTP test server
-README.md
-TESTING.md
-WALKTHROUGH_ZH.md
+  server.js               Database connection and startup
+  app.js                  Express setup and account routes
+  projects.js             Project and membership API
+  test/                   Backend tests
 ```
 
-## Install and run
+## Getting Started
 
-Use Node.js 24 LTS (tested with 24.15.0). From the repository directory, install dependencies if necessary:
+Install Node.js and have a MongoDB Atlas database ready. From the repository directory, install dependencies in both folders:
 
-```powershell
+```bash
 cd server
-npm ci
+npm install
 cd ../client
-npm ci
+npm install
 ```
 
-Keep the existing `server/.env`. For a fresh clone, create that file with your own Atlas URI:
+Create `server/.env` and set your Atlas connection string:
 
 ```dotenv
 MONGO_URI=your_mongodb_connection_string
 ```
 
-Never commit the actual URI. `.env`, `node_modules`, and the client build directory are ignored by Git. The implementation does not change the existing connection string or DNS settings.
+Keep `.env` private. Make sure your current IP address is allowed in Atlas Network Access.
 
-Start the backend in terminal 1:
+Start the backend in one terminal (from `server/`):
 
-```powershell
-cd 'D:\大学\UAlbany\Courses\ICSI418Y Software Engineering\Assignment\3\ICSI418Y_PA3\server'
+```bash
 npm start
 ```
 
-Start the frontend in terminal 2:
+Start the frontend in a second terminal (from `client/`):
 
-```powershell
-cd 'D:\大学\UAlbany\Courses\ICSI418Y Software Engineering\Assignment\3\ICSI418Y_PA3\client'
+```bash
 npm run dev
 ```
 
-Open the URL printed by Vite, normally http://localhost:5173. The API listens on http://localhost:9000. The browser uses this local API address, so both processes must be running on your computer.
+Open the local URL printed by Vite, usually `http://localhost:5173`. The backend API runs at `http://localhost:9000`.
 
-The backend waits for Atlas and the membership uniqueness index before accepting HTTP requests. If startup fails, verify Atlas network access, credentials, and database permissions. It prints an error name/code without printing the URI. Existing duplicate membership pairs must be resolved before the unique index can be created; startup does not silently delete records.
+## Database
 
-## MongoDB relationships
+The app uses the existing `pa2` database with three collections:
 
-Collection names are case-sensitive. `users` is the original PA2 collection; do not create a second `Users` collection.
+- `users`: registered users from PA2.
+- `Projects`: projects with `name`, `description`, `status`, and `project_lead_id`.
+- `ProjectMemberships`: relationships stored as `project_id` and `user_id`.
 
-```javascript
-// Projects
-{
-  _id: ObjectId("..."),
-  name: "Campus Event Planner",
-  description: "Organize campus events.",
-  status: "Planning",
-  project_lead_id: ObjectId("...") // references users._id
-}
+The relationship fields are MongoDB ObjectIds. A user may join multiple projects, and a project may contain multiple users. The project lead is also a member. A unique index prevents duplicate project/user pairs, and project creation uses a transaction to save the project and lead membership together.
 
-// ProjectMemberships
-{
-  _id: ObjectId("..."),
-  project_id: ObjectId("..."), // references Projects._id
-  user_id: ObjectId("...")     // references users._id
-}
-```
+## API Endpoints
 
-Each membership is one user/project pair. A user in two projects has two membership documents. A project with three members has three membership documents. Names are display values, never relationship keys.
-
-A compound unique index on `{ project_id: 1, user_id: 1 }` prevents duplicate pairs, including concurrent requests. Project creation uses a MongoDB transaction to insert the project and its lead membership together; a failed membership insert rolls back the project. The configured Atlas deployment supports this. A standalone local MongoDB server without transaction support is not a supported substitute.
-
-JSON transports ObjectIds as strings. The API validates 24-character hexadecimal IDs and converts them to `ObjectId` before database operations. React matches returned ID strings to the public user list to show names.
-
-## API
-
-All responses are JSON. Errors contain `{ "message": "..." }`.
-
-| Method | Path | Request body / result |
+| Method | Path | Description |
 | --- | --- | --- |
-| POST | `/signup` | `{ f_name, l_name, username, password }`; existing signup |
-| POST | `/login` | `{ username, password }`; existing credential check |
-| GET | `/api/users` | Array containing only `_id`, `f_name`, `l_name`, `username` |
-| POST | `/api/projects` | `{ name, description, status, project_lead_id }`; returns `{ message, project }` |
-| GET | `/api/projects` | Array of project documents |
-| GET | `/api/projects/:projectId/members` | Array of membership documents |
-| POST | `/api/projects/:projectId/members` | `{ user_id }`; returns `{ message, membership }` |
-| DELETE | `/api/projects/:projectId/members/:userId` | Returns `{ message }` |
+| POST | `/signup` | Register a user |
+| POST | `/login` | Check user credentials |
+| GET | `/api/users` | Get registered users |
+| POST | `/api/projects` | Create a project |
+| GET | `/api/projects` | List projects |
+| GET | `/api/projects/:projectId/members` | List project members |
+| POST | `/api/projects/:projectId/members` | Add a member |
+| DELETE | `/api/projects/:projectId/members/:userId` | Remove a member |
 
-Expected status codes: `200` for reads/login/removal, `201` for creation, `400` for invalid input or lead removal, `401` for invalid login, `404` for missing records, `409` for duplicate membership/username, and `500` for database failures. Malformed JSON returns `400`; oversized JSON returns `413`.
+## Testing
 
-The backend verifies required strings, exact status values, IDs, and referenced users/projects. The UI also checks required project fields, but server validation is authoritative. Public user responses whitelist safe fields and never return passwords.
+In `server/`, run `npm test` for API tests or `npm run test:integration` for live Atlas tests. Integration tests create temporary records and clean them up at the end; let the run finish.
 
-## Verification
+In `client/`, run `npm run lint` and `npm run build`.
 
-```powershell
-# From server/
-npm test
-npm run test:integration
+## Note
 
-# From client/
-npm run lint
-npm run build
-```
-
-`npm test` runs without Atlas. `npm run test:integration` deliberately connects to the configured Atlas `pa2` database, creates uniquely named temporary fixtures, and removes only those fixtures afterward. It does not delete existing users/projects or drop collections. The membership index remains part of the application. See `TESTING.md` for coverage and manual UI checks.
-
-## Video and study guide
-
-See `WALKTHROUGH_ZH.md` for a beginner-friendly code walkthrough and a 3–5 minute recording sequence. Before recording, use Signup to prepare at least three users and create at least two projects. Automated tests clean their fixtures and do not leave demonstration accounts behind.
-
-## Scope
-
-As in PA2, login only checks credentials and displays feedback. The inherited password storage is unchanged, and this coursework application has no session-based access control. The project-management pages are accessible without a login session. Authentication hardening, project editing, project deletion, and lead reassignment are outside this assignment.
-
-Review the changes before committing and pushing. No automatic GitHub push is part of this implementation.
+As in PA2, login checks credentials but does not create a user session. This is a course assignment rather than a production authentication system.
