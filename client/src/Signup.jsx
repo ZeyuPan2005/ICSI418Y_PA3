@@ -1,6 +1,6 @@
 import { useState } from 'react'
 
-function Signup() {
+function Signup({ onRegistered }) {
   // useState remembers a value between renders; its setter updates it and asks React to render again.
   // Empty strings make each input start blank while React keeps track of what the user types.
   const [firstName, setFirstName] = useState('')
@@ -50,6 +50,7 @@ function Signup() {
 
       setIsError(false)
       setMessage(data.message)
+      onRegistered?.()
     } catch {
       setIsError(true)
       setMessage('Could not connect to the server.')

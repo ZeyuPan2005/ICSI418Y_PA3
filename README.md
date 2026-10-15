@@ -1,188 +1,150 @@
-# ICSI418Y_PA2
+# ICSI418Y PA3 — Projects and Project Memberships
 
-Programming Assignment 2 for ICSI 418Y Software Engineering.
-
-## Description
-
-This project is a simple full-stack signup and login application built with React, Node.js, Express, and MongoDB.
-
-The application allows a user to create a new account with a first name, last name, username, and password. The user information is stored in a MongoDB database.
-
-Existing users can also log in with their username and password. The application provides feedback for successful and unsuccessful signup and login attempts.
+PA3 extends the existing PA2 signup/login application with project creation, project listing, and many-to-many project membership management. It reuses the existing MongoDB Atlas connection, database `pa2`, and lowercase `users` collection.
 
 ## Features
 
-### Signup
+- Existing Signup and Login remain available under **Accounts**.
+- Create projects with a name, description, status, and registered Project Lead.
+- Status is exactly `Planning`, `Active`, or `Completed`.
+- Display project leads and members by name and username.
+- Automatically add the lead as a member in the same database transaction as project creation.
+- Add a user to several projects; reject duplicate membership within one project.
+- Remove non-lead members; protect the lead in both the UI and API.
+- Update lists after changes; show loading, empty, success, and failure states with retry controls.
+- Refresh registered users after successful signup.
 
-- Create a new user with:
-  - First Name
-  - Last Name
-  - Username
-  - Password
-- Check that all required fields are provided
-- Prevent duplicate usernames
-- Store new users in MongoDB
-- Display success or error feedback to the user
+## Technologies and structure
 
-### Login
-
-- Log in with a username and password
-- Check that both fields are provided
-- Check whether the username exists
-- Check whether the password matches the stored password
-- Display success or error feedback to the user
-
-## Technologies
-
-### Frontend
-
-- React
-- JavaScript
-- Vite
-- CSS
-
-### Backend
-
-- Node.js
-- Express
-- MongoDB
-- CORS
-- dotenv
-
-### Database
-
-- MongoDB Atlas
-- Database: `pa2`
-- Collection: `users`
-
-## Project Structure
+React, JavaScript, Vite, CSS; Node.js, Express 5, CommonJS, and the native MongoDB driver. No Mongoose, JWT, or React Router was added.
 
 ```text
-ICSI418Y_PA2/
-├── client/
-│   ├── src/
-│   │   ├── App.jsx
-│   │   ├── Signup.jsx
-│   │   ├── Login.jsx
-│   │   ├── main.jsx
-│   │   ├── App.css
-│   │   └── index.css
-│   ├── package.json
-│   └── index.html
-│
-├── server/
-│   ├── server.js
-│   ├── package.json
-│   └── .env
-│
-├── .gitignore
-└── README.md
+client/
+  src/
+    App.jsx                Shared data, navigation, project selection
+    Signup.jsx, Login.jsx  Existing PA2 account forms
+    CreateProject.jsx      Project form
+    ProjectList.jsx        Project cards and readable lead names
+    ProjectMembers.jsx     Member retrieval, addition, removal
+    api.js                 JSON requests and user display labels
+    App.css, index.css     Responsive styling
+server/
+  server.js                Existing .env configuration, database connection, startup
+  app.js                   Existing auth routes, Express setup, safe error responses
+  projects.js              PA3 routes, validation, transaction, unique index
+  test/
+    app.test.js            Offline HTTP validation and failure tests
+    integration.test.js    Real Atlas integration tests with fixture cleanup
+    helpers.js             Temporary HTTP test server
+README.md
+TESTING.md
+WALKTHROUGH_ZH.md
 ```
 
-The `client` directory contains the React frontend, while the `server` directory contains the Express backend and MongoDB connection.
+## Install and run
 
-The `.env` file is stored locally and is excluded from Git.
+Use Node.js 24 LTS (tested with 24.15.0). From the repository directory, install dependencies if necessary:
 
-## How to Run
-
-### 1. Clone the Repository
-
-Clone the repository and enter the project directory.
-
-```bash
-git clone <repository-url>
-cd ICSI418Y_PA2
+```powershell
+cd server
+npm ci
+cd ../client
+npm ci
 ```
 
-### 2. Configure MongoDB
+Keep the existing `server/.env`. For a fresh clone, create that file with your own Atlas URI:
 
-Create a `.env` file inside the `server` directory:
-
-```text
+```dotenv
 MONGO_URI=your_mongodb_connection_string
 ```
 
-The actual MongoDB connection string should not be committed to GitHub.
+Never commit the actual URI. `.env`, `node_modules`, and the client build directory are ignored by Git. The implementation does not change the existing connection string or DNS settings.
 
-### 3. Start the Backend
+Start the backend in terminal 1:
 
-Open a terminal in the project directory and run:
-
-```bash
-cd server
-npm install
-node server.js
+```powershell
+cd 'D:\大学\UAlbany\Courses\ICSI418Y Software Engineering\Assignment\3\ICSI418Y_PA3\server'
+npm start
 ```
 
-The backend server runs on:
+Start the frontend in terminal 2:
 
-```text
-http://localhost:9000
-```
-
-When the server successfully connects to MongoDB, the terminal should display messages indicating that the server is running and MongoDB is connected.
-
-### 4. Start the Frontend
-
-Open another terminal in the project directory and run:
-
-```bash
-cd client
-npm install
+```powershell
+cd 'D:\大学\UAlbany\Courses\ICSI418Y Software Engineering\Assignment\3\ICSI418Y_PA3\client'
 npm run dev
 ```
 
-Vite will provide a local URL for the React application. Open that URL in a browser to use the application.
+Open the URL printed by Vite, normally http://localhost:5173. The API listens on http://localhost:9000. The browser uses this local API address, so both processes must be running on your computer.
 
-## Application Flow
+The backend waits for Atlas and the membership uniqueness index before accepting HTTP requests. If startup fails, verify Atlas network access, credentials, and database permissions. It prints an error name/code without printing the URI. Existing duplicate membership pairs must be resolved before the unique index can be created; startup does not silently delete records.
 
-The application follows a simple full-stack structure:
+## MongoDB relationships
 
-```text
-React Frontend
-      |
-      | HTTP POST Requests
-      v
-Express Backend
-      |
-      | MongoDB Operations
-      v
-MongoDB Atlas
+Collection names are case-sensitive. `users` is the original PA2 collection; do not create a second `Users` collection.
+
+```javascript
+// Projects
+{
+  _id: ObjectId("..."),
+  name: "Campus Event Planner",
+  description: "Organize campus events.",
+  status: "Planning",
+  project_lead_id: ObjectId("...") // references users._id
+}
+
+// ProjectMemberships
+{
+  _id: ObjectId("..."),
+  project_id: ObjectId("..."), // references Projects._id
+  user_id: ObjectId("...")     // references users._id
+}
 ```
 
-For signup, the React frontend sends the user's first name, last name, username, and password to the `/signup` endpoint. The backend validates the data, checks for an existing username, and inserts a new user into MongoDB when the username is available.
+Each membership is one user/project pair. A user in two projects has two membership documents. A project with three members has three membership documents. Names are display values, never relationship keys.
 
-For login, the React frontend sends the username and password to the `/login` endpoint. The backend finds the user in MongoDB and checks whether the submitted password matches the stored password.
+A compound unique index on `{ project_id: 1, user_id: 1 }` prevents duplicate pairs, including concurrent requests. Project creation uses a MongoDB transaction to insert the project and its lead membership together; a failed membership insert rolls back the project. The configured Atlas deployment supports this. A standalone local MongoDB server without transaction support is not a supported substitute.
 
-The backend then sends a JSON response to the frontend, and React displays the corresponding success or error message.
+JSON transports ObjectIds as strings. The API validates 24-character hexadecimal IDs and converts them to `ObjectId` before database operations. React matches returned ID strings to the public user list to show names.
 
-## API Endpoints
+## API
 
-### `POST /signup`
+All responses are JSON. Errors contain `{ "message": "..." }`.
 
-Creates a new user.
+| Method | Path | Request body / result |
+| --- | --- | --- |
+| POST | `/signup` | `{ f_name, l_name, username, password }`; existing signup |
+| POST | `/login` | `{ username, password }`; existing credential check |
+| GET | `/api/users` | Array containing only `_id`, `f_name`, `l_name`, `username` |
+| POST | `/api/projects` | `{ name, description, status, project_lead_id }`; returns `{ message, project }` |
+| GET | `/api/projects` | Array of project documents |
+| GET | `/api/projects/:projectId/members` | Array of membership documents |
+| POST | `/api/projects/:projectId/members` | `{ user_id }`; returns `{ message, membership }` |
+| DELETE | `/api/projects/:projectId/members/:userId` | Returns `{ message }` |
 
-Possible responses include:
+Expected status codes: `200` for reads/login/removal, `201` for creation, `400` for invalid input or lead removal, `401` for invalid login, `404` for missing records, `409` for duplicate membership/username, and `500` for database failures. Malformed JSON returns `400`; oversized JSON returns `413`.
 
-- `201` - User created successfully
-- `400` - Required fields are missing
-- `409` - Username already exists
-- `500` - Server or database error
+The backend verifies required strings, exact status values, IDs, and referenced users/projects. The UI also checks required project fields, but server validation is authoritative. Public user responses whitelist safe fields and never return passwords.
 
-### `POST /login`
+## Verification
 
-Checks an existing user's credentials.
+```powershell
+# From server/
+npm test
+npm run test:integration
 
-Possible responses include:
+# From client/
+npm run lint
+npm run build
+```
 
-- `200` - Login successful
-- `400` - Required fields are missing
-- `401` - Invalid username or password
-- `500` - Server or database error
+`npm test` runs without Atlas. `npm run test:integration` deliberately connects to the configured Atlas `pa2` database, creates uniquely named temporary fixtures, and removes only those fixtures afterward. It does not delete existing users/projects or drop collections. The membership index remains part of the application. See `TESTING.md` for coverage and manual UI checks.
 
-## Notes
+## Video and study guide
 
-- MongoDB automatically generates the `_id` field for each new user.
-- The MongoDB connection string is stored in `server/.env`.
-- The `.env` file and `node_modules` directories are excluded from Git and are not included in the repository.
-- This assignment only requires the application to acknowledge a successful login. It does not implement sessions or authentication tokens.
+See `WALKTHROUGH_ZH.md` for a beginner-friendly code walkthrough and a 3–5 minute recording sequence. Before recording, use Signup to prepare at least three users and create at least two projects. Automated tests clean their fixtures and do not leave demonstration accounts behind.
+
+## Scope
+
+As in PA2, login only checks credentials and displays feedback. The inherited password storage is unchanged, and this coursework application has no session-based access control. The project-management pages are accessible without a login session. Authentication hardening, project editing, project deletion, and lead reassignment are outside this assignment.
+
+Review the changes before committing and pushing. No automatic GitHub push is part of this implementation.
